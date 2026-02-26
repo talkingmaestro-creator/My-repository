@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create 2 VPCs and connect them using a Transit Gateway
+
+Resources:
+
+# -------------------------
+# VPC 1
+# -------------------------
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: VPC-1
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: VPC1-Subnet
+
+  RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+
+  RouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet1
+      RouteTableId: !Ref RouteTable1
+
+# -------------------------
+# VPC 2
+# -------------------------
+  VPC2:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: VPC-2
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: VPC2-Subnet
+
+  RouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC2
+
+  RouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable2
+
+# -------------------------
+# Transit Gateway
+# -------------------------
+  TransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: Transit Gateway for VPC communication
+      DefaultRouteTableAssociation: enable
+      DefaultRouteTablePropagation: enable
+
+# -------------------------
+# Attach VPCs to TGW
+# -------------------------
+  TGWAttachment1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref VPC1
+      SubnetIds:
+        - !Ref Subnet1
+
+  TGWAttachment2:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref VPC2
+      SubnetIds:
+        - !Ref Subnet2
+
+# -------------------------
+# Routes for communication
+# -------------------------
+  Route1ToVPC2:
+    Type: AWS::EC2::Route
+    DependsOn: TGWAttachment1
+    Properties:
+      RouteTableId: !Ref RouteTable1
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayId: !Ref TransitGateway
+
+  Route2ToVPC1:
+    Type: AWS::EC2::Route
+    DependsOn: TGWAttachment2
+    Properties:
+      RouteTableId: !Ref RouteTable2
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayId: !Ref TransitGateway
